@@ -4,11 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>智能选股系统 Pro（零构建版）</title>
-<script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/vue@3.4.38/dist/vue.global.js"></script>
 <script src="https://unpkg.com/axios@1.7.7/dist/axios.min.js"></script>
 <script src="https://unpkg.com/echarts@5.5.1/dist/echarts.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/element-plus@2.8.4/dist/index.css" />
 <script src="https://unpkg.com/element-plus@2.8.4/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
 <style>
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif; background:#f5f7fa; }
   * { box-sizing:border-box; }
@@ -59,7 +60,7 @@
       </div>
     </div>
     <div style="display:flex; gap:10px">
-      <el-tag :type="ollamaOk ? 'success' : 'warning" effect="plain" round>
+      <el-tag :type="ollamaOk ? 'success' : 'warning'" effect="plain" round>
         Ollama: {{ ollamaOk ? ollamaModel + ' 已连接' : '未连接' }}
       </el-tag>
       <el-tag type="info" effect="plain" round>T+1 模式</el-tag>
@@ -81,19 +82,19 @@
               <el-checkbox value="HK">港股</el-checkbox>
               <el-checkbox value="ETF">ETF</el-checkbox>
             </el-checkbox-group>
-            <div v-if="searchLoading" style="padding:8px 4px"><el-icon class="is-loading"><loading /></el-icon> 搜索中...</div>
+            <div v-if="searchLoading" style="padding:8px 4px">⌛ 搜索中...</div>
             <el-scrollbar v-else style="max-height:260px">
               <el-table :data="searchResult" size="small" stripe @row-click="goAnalyze" highlight-current-row style="cursor:pointer">
-                <el-table-column label="名称" prop="name" min-width="110" />
-                <el-table-column label="代码" prop="code" width="80" />
-                <el-table-column label="首字母" prop="first_letter" width="80" />
+                <el-table-column label="名称" prop="name" min-width="110"></el-table-column>
+                <el-table-column label="代码" prop="code" width="80"></el-table-column>
+                <el-table-column label="首字母" prop="first_letter" width="80"></el-table-column>
                 <el-table-column label="市场" width="56">
                   <template #default="{row}">
                     <el-tag size="small" :type="row.market==='A'?'success':row.market==='HK'?'warning':'info'">{{ row.market }}</el-tag>
                   </template>
                 </el-table-column>
               </el-table>
-              <el-empty v-if="searchResult.length===0 && q" description="暂无匹配" :image-size="60" />
+              <el-empty v-if="searchResult.length===0 && q" description="暂无匹配" :image-size="60"></el-empty>
             </el-scrollbar>
           </el-card>
         </el-col>
@@ -104,23 +105,23 @@
             <el-form label-width="100px" size="small">
               <el-divider>权重（总和=100%）</el-divider>
               <el-form-item label="技术面权重">
-                <el-slider v-model="weights.technical" :min="0" :max="1" :step="0.05" />
+                <el-slider v-model="weights.technical" :min="0" :max="1" :step="0.05"></el-slider>
                 <span style="font-size:12px;color:#606266">{{ Math.round(weights.technical*100) }}%</span>
               </el-form-item>
               <el-form-item label="基本面权重">
-                <el-slider v-model="weights.fundamental" :min="0" :max="1" :step="0.05" />
+                <el-slider v-model="weights.fundamental" :min="0" :max="1" :step="0.05"></el-slider>
                 <span style="font-size:12px;color:#606266">{{ Math.round(weights.fundamental*100) }}%</span>
               </el-form-item>
               <el-form-item label="情绪面权重">
-                <el-slider v-model="weights.sentiment" :min="0" :max="1" :step="0.05" />
+                <el-slider v-model="weights.sentiment" :min="0" :max="1" :step="0.05"></el-slider>
                 <span style="font-size:12px;color:#606266">{{ Math.round(weights.sentiment*100) }}%</span>
               </el-form-item>
               <el-divider>选股阈值</el-divider>
               <el-form-item label="分数下限">
-                <el-slider v-model="scoreThreshold" :min="50" :max="90" :step="5" show-stops :marks="{50:'50',60:'60',70:'70',80:'80',90:'90'}" />
+                <el-slider v-model="scoreThreshold" :min="50" :max="90" :step="5" show-stops :marks="{50:'50',60:'60',70:'70',80:'80',90:'90'}"></el-slider>
               </el-form-item>
               <el-form-item label="Top N"><el-select v-model="topN" style="width:100%">
-                <el-option v-for="n in [10,20,30,50,100,200]" :key="n" :value="n" :label="n+' 只'" />
+                <el-option v-for="n in [10,20,30,50,100,200]" :key="n" :value="n" :label="n+' 只'"></el-option>
               </el-select></el-form-item>
               <el-form-item label="并发线程">
                 <el-radio-group v-model="workers"><el-radio :value="1">1</el-radio><el-radio :value="3">3</el-radio><el-radio :value="5">5</el-radio><el-radio :value="8">8</el-radio></el-radio-group>
@@ -132,13 +133,13 @@
                 </el-checkbox-group>
               </el-form-item>
               <el-form-item label="板块"><el-select v-model="sector" clearable style="width:100%" placeholder="不选=全市场">
-                <el-option label="所有板块（慢）" value="所有板块" />
-                <el-option v-for="s in sectors" :key="s" :value="s" :label="s" />
+                <el-option label="所有板块（慢）" value="所有板块"></el-option>
+                <el-option v-for="s in sectors" :key="s" :value="s" :label="s"></el-option>
               </el-select></el-form-item>
               <el-form-item label="自定义代码">
-                <el-input v-model="customCodes" type="textarea" :rows="2" placeholder="多个代码用逗号或空格分隔" />
+                <el-input v-model="customCodes" type="textarea" :rows="2" placeholder="多个代码用逗号或空格分隔"></el-input>
               </el-form-item>
-              <el-form-item label="买卖决策"><el-switch v-model="includeBuySell" /></el-form-item>
+              <el-form-item label="买卖决策"><el-switch v-model="includeBuySell"></el-switch></el-form-item>
               <el-row :gutter="10">
                 <el-col :span="12"><el-button type="primary" style="width:100%" :loading="scanning" @click="startNormalScan">🎯 量化选股</el-button></el-col>
                 <el-col :span="12"><el-button type="success" style="width:100%" :loading="scanning" @click="startAIScan">🤖 AI智能选股</el-button></el-col>
@@ -166,7 +167,7 @@
               <div class="kpi-item"><div class="kpi-label">已处理</div><div class="kpi-value">{{ progress.processed || 0 }}</div></div>
               <div class="kpi-item"><div class="kpi-label">通过</div><div class="kpi-value">{{ progress.passed_filter || 0 }}</div></div>
             </div>
-            <el-progress :percentage="progress.progress_pct || 0" :stroke-width="14" />
+            <el-progress :percentage="progress.progress_pct || 0" :stroke-width="14"></el-progress>
             <div style="font-size:12px;color:#606266;margin:6px 0">
               {{ progress.current_stage || '等待启动' }} ·
               耗时 {{ progress.elapsed_text || '0秒' }} · {{ progress.eta_text || '' }} ·
@@ -187,7 +188,7 @@
         <el-tabs v-model="activeTab">
           <el-tab-pane label="选股结果" name="result">
             <el-table :data="results" stripe size="small" v-loading="scanning" @row-click="openDetail" style="cursor:pointer">
-              <el-table-column label="#" type="index" width="50" />
+              <el-table-column label="#" type="index" width="50"></el-table-column>
               <el-table-column label="代码/名称" min-width="180">
                 <template #default="{row}">
                   <div style="font-weight:600">{{ row.name || '-' }}</div>
@@ -212,7 +213,7 @@
               </el-table-column>
               <el-table-column label="现价/涨跌" width="120">
                 <template #default="{row}">
-                  <div style="font-weight:600;color:" :style="{color: colorPct(row.snapshot?.change_pct)}">{{ row.snapshot?.price?.toFixed?.(3) || '-' }}</div>
+                  <div :style="{color: colorPct(row.snapshot?.change_pct)}" style="font-weight:600">{{ row.snapshot?.price?.toFixed?.(3) || '-' }}</div>
                   <div style="font-size:12px" :style="{color: colorPct(row.snapshot?.change_pct)}">
                     {{ pct(row.snapshot?.change_pct) }}%
                   </div>
@@ -230,7 +231,7 @@
                 </template>
               </el-table-column>
             </el-table>
-            <el-empty v-if="!scanning && results.length===0" description="请先点击【量化选股】或【AI智能选股】" />
+            <el-empty v-if="!scanning && results.length===0" description="请先点击【量化选股】或【AI智能选股】"></el-empty>
           </el-tab-pane>
 
           <el-tab-pane label="AI分析报告" name="ai">
@@ -244,13 +245,13 @@
               </template>
               <el-scrollbar style="max-height:calc(100vh - 220px)">
                 <div v-if="aiReport" class="report-box md-inline">{{ aiReport }}</div>
-                <el-empty v-else description="请先点击【AI智能选股】按钮，量化筛选后会调用本地Ollama生成深度报告" />
+                <el-empty v-else description="请先点击【AI智能选股】按钮，量化筛选后会调用本地Ollama生成深度报告"></el-empty>
               </el-scrollbar>
             </el-card>
           </el-tab-pane>
 
           <el-tab-pane label="个股深度分析" name="detail" v-if="detailCode">
-            <div v-if="detailLoading"><el-empty description="加载中..." /></div>
+            <div v-if="detailLoading"><el-empty description="加载中..."></el-empty></div>
             <template v-else>
               <div class="kpi-row" style="margin-bottom:12px">
                 <div class="kpi-item"><div class="kpi-label">名称</div><div class="kpi-value" style="font-size:18px">{{ detail.score?.name || detailCode }}</div></div>
@@ -283,8 +284,8 @@
                     <el-button :loading="detailAILoading" type="primary" @click="doDetailAI">{{ detailAIReport ? '重新生成' : '生成AI分析' }}</el-button>
                   </div>
                 </template>
-                <el-empty v-if="!detailAIReport && !detailAILoading" description="点击右上角生成报告" />
-                <div v-else-if="detailAILoading" style="text-align:center;padding:24px"><el-icon class="is-loading" style="font-size:22px"><loading /></el-icon> AI 生成中，请耐心等待...</div>
+                <el-empty v-if="!detailAIReport && !detailAILoading" description="点击右上角生成报告"></el-empty>
+                <div v-else-if="detailAILoading" style="text-align:center;padding:24px; font-size:22px">⌛ AI 生成中，请耐心等待...</div>
                 <div v-else class="report-box md-inline">{{ detailAIReport }}</div>
               </el-card>
             </template>
@@ -297,13 +298,11 @@
 
 <script>
 const { createApp, reactive, ref, computed, watch, onMounted, nextTick } = Vue
-const app = createApp({})
-app.use(ElementPlus)
-app.component('ElIcon', ElementPlus.ElIcon)
-
 const API = axios.create({ baseURL: '/api', timeout: 60_000 })
 
-// 所有状态都挂在 setup root
+// Vue3 + Element Plus + Icons Vue (IIFE exposes global ElementPlusIconsVue)
+const Icons = window.ElementPlusIconsVue || {}
+
 const root = {
   setup() {
     const q = ref('')
@@ -339,7 +338,7 @@ const root = {
     const ollamaModel = ref('qwen2.5:7b')
     async function checkOllama() {
       try { const r = await API.post('/common/ollama/check', {}); const d = r.data; ollamaOk.value = !!d.ok; if(d.using_model) ollamaModel.value = d.using_model }
-      catch { ollamaOk.value = false }
+      catch(e) { ollamaOk.value = false }
     }
 
     // 选股扫描
@@ -355,7 +354,7 @@ const root = {
     function closeSSE() { if (_sse) { _sse.close(); _sse = null } }
 
     function buildBody() {
-      const codes = customCodes.value ? customCodes.value.split(/[,s]+/).filter(Boolean) : undefined
+      const codes = customCodes.value ? customCodes.value.split(/[\s,]+/).filter(Boolean) : undefined
       return {
         markets: scanMarkets.value.length ? scanMarkets.value : ['A'],
         stock_codes: codes,
@@ -461,9 +460,9 @@ const root = {
       try {
         const r = await API.get('/common/config'); const d = r.data
         Object.assign(weights, d.weights); scoreThreshold.value = d.score_threshold; sectors.value = d.sectors || []
-      } catch {}
+      } catch(e) {}
       checkOllama()
-      try { const h = await API.get('/search/hot', { params: { markets: 'A', limit: 5 } }); searchResult.value = h.data.items || [] } catch {}
+      try { const h = await API.get('/search/hot', { params: { markets: 'A', limit: 5 } }); searchResult.value = h.data.items || [] } catch(e) {}
     })
 
     return {
@@ -477,12 +476,25 @@ const root = {
     }
   }
 }
-app.mixin({})
-app._component = root.setup
-// 直接挂载：我们提供一个标准 setup 入口（Vue3 createApp 直接使用 setup 函数）
-const realApp = createApp(root)
-realApp.use(ElementPlus)
-realApp.mount('#app')
+
+// 一次性正确初始化：use ElementPlus，挂载
+const app = createApp(root)
+app.config.errorHandler = (err, vm, info) => {
+  console.error('[Vue Error]', info, err)
+  if (err && err.stack) console.error(err.stack)
+}
+app.config.warnHandler = (msg, vm, trace) => console.warn('[Vue Warn]', msg, trace)
+app.use(ElementPlus)
+try {
+  app.mount('#app')
+  const bodyInfo = {
+    children: document.querySelector('#app')?.children.length ?? -1,
+    innerTextLen: (document.querySelector('#app')?.innerText || '').length,
+  }
+  console.log('[mount ok]', bodyInfo)
+} catch (e) {
+  console.error('[mount FAIL]', e.message, e.stack)
+}
 </script>
 </body>
 </html>
