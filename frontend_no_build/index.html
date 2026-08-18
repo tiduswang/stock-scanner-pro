@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智能选股系统 Pro（零构建版）</title>
+<script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/axios@1.7.7/dist/axios.min.js"></script>
+<script src="https://unpkg.com/echarts@5.5.1/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.8.4/dist/index.css" />
+<script src="https://unpkg.com/element-plus@2.8.4/dist/index.full.min.js"></script>
+<style>
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif; background:#f5f7fa; }
+  * { box-sizing:border-box; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#c0c4cc; border-radius:4px; }
+  .app-header { height:64px; padding:0 24px; background:#fff; border-bottom:1px solid #ebeef5; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:50; }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-avatar { width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .logo-title { font-size:18px; font-weight:700; letter-spacing:0.5px; }
+  .logo-sub { font-size:12px; color:#909399; }
+  .wrap { padding:16px 24px 32px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid transparent; }
+  .pill-buy { background:#fef0f0; color:#e74c3c; border-color:#fde2e2; }
+  .pill-sell { background:#eaf4e8; color:#27ae60; border-color:#e1f3d8; }
+  .pill-hold { background:#ecf5ff; color:#3498db; border-color:#d9ecff; }
+  .pill-watch { background:#fdf6ec; color:#e67e22; border-color:#faecd8; }
+  .score-s { color:#e74c3c; font-weight:700; } .score-a { color:#e67e22; font-weight:700; }
+  .score-b { color:#f39c12; font-weight:700; } .score-c { color:#3498db; font-weight:700; }
+  .score-d { color:#95a5a6; font-weight:600; } .score-e { color:#7f8c8d; font-weight:600; }
+  .kpi-row { display:flex; gap:16px; flex-wrap:wrap; }
+  .kpi-item { flex:1; min-width:120px; background:#fff; border-radius:8px; padding:12px 16px; border:1px solid #ebeef5; }
+  .kpi-label { font-size:12px; color:#909399; }
+  .kpi-value { font-size:20px; font-weight:700; margin-top:4px; }
+  .chart-box { width:100%; height:320px; }
+  .log-box { background:#fafbfc; border:1px solid #f0f0f0; border-radius:6px; padding:8px; max-height:240px; overflow:auto; }
+  .log-item { padding:3px 0; font-size:12px; color:#303133; display:flex; gap:8px; }
+  .log-time { color:#909399; }
+  .report-box { line-height:1.8; padding:8px; }
+  .report-box h3 { border-left:4px solid #667eea; padding-left:10px; margin:16px 0 8px; }
+  .report-box h4 { border-left:3px solid #3498db; padding-left:8px; margin:12px 0 6px; }
+  .report-box strong { color:#e67e22; }
+  .three-bar { display:flex; align-items:center; gap:6px; font-size:12px; }
+  .three-bar span:first-child { width:28px; color:#606266; }
+  .three-bar .bar { flex:1; height:8px; background:#f0f0f0; border-radius:4px; overflow:hidden; }
+  .three-bar .fill { height:100%; transition:width .3s; }
+  .three-bar span:last-child { width:32px; text-align:right; }
+  .md-inline { white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="app-header">
+    <div class="logo">
+      <div class="logo-avatar">AI</div>
+      <div>
+        <div class="logo-title">智能选股系统 Pro · 零构建版</div>
+        <div class="logo-sub">量化T+1 · 三面分析 · Ollama本地AI深度解读</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:10px">
+      <el-tag :type="ollamaOk ? 'success' : 'warning" effect="plain" round>
+        Ollama: {{ ollamaOk ? ollamaModel + ' 已连接' : '未连接' }}
+      </el-tag>
+      <el-tag type="info" effect="plain" round>T+1 模式</el-tag>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <el-row :gutter="16">
+      <!-- 左侧 -->
+      <el-col :span="7">
+        <el-col :span="24" style="margin-bottom:16px">
+          <el-card shadow="never">
+            <template #header><b>股票搜索（代码/拼音/名称）</b></template>
+            <el-input v-model="q" placeholder="000001 / PAYH / 平安银行" size="large" clearable @input="onSearch" @keyup.enter="doSearch">
+              <template #prefix>🔍</template>
+            </el-input>
+            <el-checkbox-group v-model="searchMarkets" style="margin:10px 0">
+              <el-checkbox value="A">A股</el-checkbox>
+              <el-checkbox value="HK">港股</el-checkbox>
+              <el-checkbox value="ETF">ETF</el-checkbox>
+            </el-checkbox-group>
+            <div v-if="searchLoading" style="padding:8px 4px"><el-icon class="is-loading"><loading /></el-icon> 搜索中...</div>
+            <el-scrollbar v-else style="max-height:260px">
+              <el-table :data="searchResult" size="small" stripe @row-click="goAnalyze" highlight-current-row style="cursor:pointer">
+                <el-table-column label="名称" prop="name" min-width="110" />
+                <el-table-column label="代码" prop="code" width="80" />
+                <el-table-column label="首字母" prop="first_letter" width="80" />
+                <el-table-column label="市场" width="56">
+                  <template #default="{row}">
+                    <el-tag size="small" :type="row.market==='A'?'success':row.market==='HK'?'warning':'info'">{{ row.market }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-empty v-if="searchResult.length===0 && q" description="暂无匹配" :image-size="60" />
+            </el-scrollbar>
+          </el-card>
+        </el-col>
+
+        <el-col :span="24" style="margin-bottom:16px">
+          <el-card shadow="never">
+            <template #header><b>分析参数</b></template>
+            <el-form label-width="100px" size="small">
+              <el-divider>权重（总和=100%）</el-divider>
+              <el-form-item label="技术面权重">
+                <el-slider v-model="weights.technical" :min="0" :max="1" :step="0.05" />
+                <span style="font-size:12px;color:#606266">{{ Math.round(weights.technical*100) }}%</span>
+              </el-form-item>
+              <el-form-item label="基本面权重">
+                <el-slider v-model="weights.fundamental" :min="0" :max="1" :step="0.05" />
+                <span style="font-size:12px;color:#606266">{{ Math.round(weights.fundamental*100) }}%</span>
+              </el-form-item>
+              <el-form-item label="情绪面权重">
+                <el-slider v-model="weights.sentiment" :min="0" :max="1" :step="0.05" />
+                <span style="font-size:12px;color:#606266">{{ Math.round(weights.sentiment*100) }}%</span>
+              </el-form-item>
+              <el-divider>选股阈值</el-divider>
+              <el-form-item label="分数下限">
+                <el-slider v-model="scoreThreshold" :min="50" :max="90" :step="5" show-stops :marks="{50:'50',60:'60',70:'70',80:'80',90:'90'}" />
+              </el-form-item>
+              <el-form-item label="Top N"><el-select v-model="topN" style="width:100%">
+                <el-option v-for="n in [10,20,30,50,100,200]" :key="n" :value="n" :label="n+' 只'" />
+              </el-select></el-form-item>
+              <el-form-item label="并发线程">
+                <el-radio-group v-model="workers"><el-radio :value="1">1</el-radio><el-radio :value="3">3</el-radio><el-radio :value="5">5</el-radio><el-radio :value="8">8</el-radio></el-radio-group>
+              </el-form-item>
+              <el-divider>选股范围</el-divider>
+              <el-form-item label="市场">
+                <el-checkbox-group v-model="scanMarkets">
+                  <el-checkbox value="A">A股</el-checkbox><el-checkbox value="HK">港股</el-checkbox><el-checkbox value="ETF">ETF</el-checkbox>
+                </el-checkbox-group>
+              </el-form-item>
+              <el-form-item label="板块"><el-select v-model="sector" clearable style="width:100%" placeholder="不选=全市场">
+                <el-option label="所有板块（慢）" value="所有板块" />
+                <el-option v-for="s in sectors" :key="s" :value="s" :label="s" />
+              </el-select></el-form-item>
+              <el-form-item label="自定义代码">
+                <el-input v-model="customCodes" type="textarea" :rows="2" placeholder="多个代码用逗号或空格分隔" />
+              </el-form-item>
+              <el-form-item label="买卖决策"><el-switch v-model="includeBuySell" /></el-form-item>
+              <el-row :gutter="10">
+                <el-col :span="12"><el-button type="primary" style="width:100%" :loading="scanning" @click="startNormalScan">🎯 量化选股</el-button></el-col>
+                <el-col :span="12"><el-button type="success" style="width:100%" :loading="scanning" @click="startAIScan">🤖 AI智能选股</el-button></el-col>
+              </el-row>
+              <el-alert v-if="!ollamaOk" style="margin-top:10px" type="warning" show-icon :closable="false">
+                未检测到Ollama。请先安装Ollama并执行： <code>ollama pull qwen2.5:7b</code>
+              </el-alert>
+            </el-form>
+          </el-card>
+        </el-col>
+
+        <el-col :span="24" v-if="scanId">
+          <el-card shadow="never">
+            <template #header>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <b>扫描进度</b>
+                <el-tag v-if="progress.status==='running'" type="info" effect="plain" round>运行中</el-tag>
+                <el-tag v-else-if="progress.status==='done'" type="success" effect="plain" round>完成</el-tag>
+                <el-tag v-else-if="progress.status==='error'" type="danger" effect="plain" round>异常</el-tag>
+                <el-tag v-else round>准备</el-tag>
+              </div>
+            </template>
+            <div class="kpi-row" style="margin-bottom:10px">
+              <div class="kpi-item"><div class="kpi-label">总数</div><div class="kpi-value">{{ progress.total || 0 }}</div></div>
+              <div class="kpi-item"><div class="kpi-label">已处理</div><div class="kpi-value">{{ progress.processed || 0 }}</div></div>
+              <div class="kpi-item"><div class="kpi-label">通过</div><div class="kpi-value">{{ progress.passed_filter || 0 }}</div></div>
+            </div>
+            <el-progress :percentage="progress.progress_pct || 0" :stroke-width="14" />
+            <div style="font-size:12px;color:#606266;margin:6px 0">
+              {{ progress.current_stage || '等待启动' }} ·
+              耗时 {{ progress.elapsed_text || '0秒' }} · {{ progress.eta_text || '' }} ·
+              速度 {{ (progress.speed_per_sec||0).toFixed(2) }} 只/秒
+            </div>
+            <div class="log-box">
+              <div v-for="(l,i) in (progress.stage_log||[]).slice(-50)" :key="i" class="log-item">
+                <span class="log-time">[{{ l.time }}]</span>
+                <span>{{ l.msg }}</span>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+      </el-col>
+
+      <!-- 右侧 -->
+      <el-col :span="17">
+        <el-tabs v-model="activeTab">
+          <el-tab-pane label="选股结果" name="result">
+            <el-table :data="results" stripe size="small" v-loading="scanning" @row-click="openDetail" style="cursor:pointer">
+              <el-table-column label="#" type="index" width="50" />
+              <el-table-column label="代码/名称" min-width="180">
+                <template #default="{row}">
+                  <div style="font-weight:600">{{ row.name || '-' }}</div>
+                  <div style="font-size:12px;color:#909399">
+                    {{ row.code }} ·
+                    <el-tag size="small" :type="row.market==='A'?'success':row.market==='HK'?'warning':'info'">{{ row.market_name || row.market }}</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="综合评分" width="120">
+                <template #default="{row}">
+                  <div :class="'score-'+(row.rating||'c').toLowerCase()" style="font-size:22px;font-weight:800">{{ (row.score||0).toFixed(1) }}</div>
+                  <el-tag size="small" round effect="plain" :color="ratingColor(row.rating)">评级 {{ row.rating }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="三面得分" min-width="220">
+                <template #default="{row}">
+                  <div class="three-bar"><span>技术</span><div class="bar"><div class="fill" :style="{width:(row.scores?.technical||0)+'%',background:'#3498db'}"></div></div><span>{{ ((row.scores?.technical||0)).toFixed(0) }}</span></div>
+                  <div class="three-bar"><span>基本</span><div class="bar"><div class="fill" :style="{width:(row.scores?.fundamental||0)+'%',background:'#27ae60'}"></div></div><span>{{ ((row.scores?.fundamental||0)).toFixed(0) }}</span></div>
+                  <div class="three-bar"><span>情绪</span><div class="bar"><div class="fill" :style="{width:(row.scores?.sentiment||0)+'%',background:'#e67e22'}"></div></div><span>{{ ((row.scores?.sentiment||0)).toFixed(0) }}</span></div>
+                </template>
+              </el-table-column>
+              <el-table-column label="现价/涨跌" width="120">
+                <template #default="{row}">
+                  <div style="font-weight:600;color:" :style="{color: colorPct(row.snapshot?.change_pct)}">{{ row.snapshot?.price?.toFixed?.(3) || '-' }}</div>
+                  <div style="font-size:12px" :style="{color: colorPct(row.snapshot?.change_pct)}">
+                    {{ pct(row.snapshot?.change_pct) }}%
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="建议" width="110">
+                <template #default="{row}">
+                  <span v-if="row.buy_sell?.action" :class="'pill pill-'+({buy:'buy',sell:'sell',hold:'hold',watch:'watch'}[row.buy_sell.action]||'watch')">{{ row.buy_sell.action_cn }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="130">
+                <template #default="{row}">
+                  <el-button size="small" type="primary" @click.stop="openDetail(row)">详情</el-button>
+                  <el-button size="small" type="success" @click.stop="doSingleAI(row)">AI</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="!scanning && results.length===0" description="请先点击【量化选股】或【AI智能选股】" />
+          </el-tab-pane>
+
+          <el-tab-pane label="AI分析报告" name="ai">
+            <el-card shadow="never">
+              <template #header>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <b>Ollama AI 组合分析报告</b>
+                  <el-tag v-if="aiReport" type="success" round effect="plain">已生成 {{ aiReport.length }} 字</el-tag>
+                  <el-tag v-else-if="scanning && lastScanIsAI" type="info" round effect="plain">生成中...</el-tag>
+                </div>
+              </template>
+              <el-scrollbar style="max-height:calc(100vh - 220px)">
+                <div v-if="aiReport" class="report-box md-inline">{{ aiReport }}</div>
+                <el-empty v-else description="请先点击【AI智能选股】按钮，量化筛选后会调用本地Ollama生成深度报告" />
+              </el-scrollbar>
+            </el-card>
+          </el-tab-pane>
+
+          <el-tab-pane label="个股深度分析" name="detail" v-if="detailCode">
+            <div v-if="detailLoading"><el-empty description="加载中..." /></div>
+            <template v-else>
+              <div class="kpi-row" style="margin-bottom:12px">
+                <div class="kpi-item"><div class="kpi-label">名称</div><div class="kpi-value" style="font-size:18px">{{ detail.score?.name || detailCode }}</div></div>
+                <div class="kpi-item"><div class="kpi-label">现价</div><div class="kpi-value">{{ (detail.score?.snapshot?.price||0).toFixed(3) }}</div></div>
+                <div class="kpi-item"><div class="kpi-label">涨跌幅</div><div class="kpi-value" :style="{color:colorPct(detail.score?.snapshot?.change_pct)}">{{ pct(detail.score?.snapshot?.change_pct) }}%</div></div>
+                <div class="kpi-item"><div class="kpi-label">评级</div><div class="kpi-value" :class="'score-'+(detail.score?.rating||'c').toLowerCase()">{{ detail.score?.rating || '-' }} ({{ detail.score?.scores?.comprehensive_adjusted?.toFixed(1) }}分)</div></div>
+                <div class="kpi-item"><div class="kpi-label">建议</div><div class="kpi-value"><span :class="'pill pill-'+(detail.buy_sell?.action || 'watch')" style="padding:4px 12px;font-weight:700">{{ detail.buy_sell?.action_cn || '-' }}</span></div></div>
+              </div>
+              <el-row :gutter="16">
+                <el-col :span="8"><el-card shadow="never"><template #header>三面雷达</template><div ref="radarRef" class="chart-box"></div></el-card></el-col>
+                <el-col :span="16"><el-card shadow="never"><template #header>买卖点 + 理由</template>
+                  <el-descriptions :column="3" border size="small" style="margin-bottom:10px">
+                    <el-descriptions-item label="买入点">{{ detail.buy_sell?.buy_point?.description || '暂不建议' }}</el-descriptions-item>
+                    <el-descriptions-item label="止损价"><span style="color:#e74c3c;font-weight:700">{{ detail.buy_sell?.stop_loss || '-' }}</span></el-descriptions-item>
+                    <el-descriptions-item label="止盈目标">{{ detail.buy_sell?.take_profit?.description || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="仓位">{{ detail.buy_sell?.position_suggestion || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="持有期">{{ detail.buy_sell?.time_horizon || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="T+1提示">{{ detail.buy_sell?.t1_tips?.[0] || '-' }}</el-descriptions-item>
+                  </el-descriptions>
+                  <el-row :gutter="10">
+                    <el-col :span="12"><el-alert type="success" title="买入逻辑" show-icon><ul style="margin:0;padding-left:18px"><li v-for="(x,i) in detail.buy_sell?.reasons_buy||[]" :key="i">{{ x }}</li></ul></el-alert></el-col>
+                    <el-col :span="12"><el-alert type="error" title="风险/卖出逻辑" show-icon><ul style="margin:0;padding-left:18px"><li v-for="(x,i) in (detail.buy_sell?.reasons_sell||[]).concat(detail.buy_sell?.risk_warnings||[])" :key="i">{{ x }}</li></ul></el-alert></el-col>
+                  </el-row>
+                </el-card></el-col>
+              </el-row>
+              <el-card shadow="never" style="margin-top:16px">
+                <template #header>
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <b>🤖 AI 深度解读</b>
+                    <el-button :loading="detailAILoading" type="primary" @click="doDetailAI">{{ detailAIReport ? '重新生成' : '生成AI分析' }}</el-button>
+                  </div>
+                </template>
+                <el-empty v-if="!detailAIReport && !detailAILoading" description="点击右上角生成报告" />
+                <div v-else-if="detailAILoading" style="text-align:center;padding:24px"><el-icon class="is-loading" style="font-size:22px"><loading /></el-icon> AI 生成中，请耐心等待...</div>
+                <div v-else class="report-box md-inline">{{ detailAIReport }}</div>
+              </el-card>
+            </template>
+          </el-tab-pane>
+        </el-tabs>
+      </el-col>
+    </el-row>
+  </div>
+</div>
+
+<script>
+const { createApp, reactive, ref, computed, watch, onMounted, nextTick } = Vue
+const app = createApp({})
+app.use(ElementPlus)
+app.component('ElIcon', ElementPlus.ElIcon)
+
+const API = axios.create({ baseURL: '/api', timeout: 60_000 })
+
+// 所有状态都挂在 setup root
+const root = {
+  setup() {
+    const q = ref('')
+    const searchMarkets = ref(['A','HK','ETF'])
+    const searchResult = ref([])
+    const searchLoading = ref(false)
+    let _st = null
+    function onSearch() {
+      clearTimeout(_st)
+      if (!q.value) { searchResult.value = []; return }
+      _st = setTimeout(doSearch, 300)
+    }
+    async function doSearch() {
+      if (!q.value) return
+      searchLoading.value = true
+      try { const r = await API.get('/search/stock', { params: { q: q.value, markets: searchMarkets.value.join(','), limit: 30 } }); searchResult.value = r.data.items || [] }
+      finally { searchLoading.value = false }
+    }
+
+    // 参数
+    const weights = reactive({ technical: 0.45, fundamental: 0.35, sentiment: 0.20 })
+    const scoreThreshold = ref(70)
+    const topN = ref(50)
+    const workers = ref(3)
+    const scanMarkets = ref(['A'])
+    const sector = ref('')
+    const sectors = ref([])
+    const customCodes = ref('')
+    const includeBuySell = ref(true)
+
+    // Ollama
+    const ollamaOk = ref(false)
+    const ollamaModel = ref('qwen2.5:7b')
+    async function checkOllama() {
+      try { const r = await API.post('/common/ollama/check', {}); const d = r.data; ollamaOk.value = !!d.ok; if(d.using_model) ollamaModel.value = d.using_model }
+      catch { ollamaOk.value = false }
+    }
+
+    // 选股扫描
+    const scanning = ref(false)
+    const scanId = ref('')
+    const progress = reactive({ status: 'pending', total: 0, processed: 0, passed_filter: 0, progress_pct: 0, current_stage: '', stage_log: [], elapsed_text: '', eta_text: '', speed_per_sec: 0 })
+    const results = ref([])
+    const aiReport = ref('')
+    const lastScanIsAI = ref(false)
+    const activeTab = ref('result')
+
+    let _sse = null
+    function closeSSE() { if (_sse) { _sse.close(); _sse = null } }
+
+    function buildBody() {
+      const codes = customCodes.value ? customCodes.value.split(/[,s]+/).filter(Boolean) : undefined
+      return {
+        markets: scanMarkets.value.length ? scanMarkets.value : ['A'],
+        stock_codes: codes,
+        sector: sector.value || undefined,
+        score_threshold: scoreThreshold.value,
+        top_n: topN.value,
+        weights: { ...weights },
+        max_workers: workers.value,
+        include_buy_sell: includeBuySell.value,
+      }
+    }
+    async function startScan(isAI) {
+      if (scanning.value) return
+      lastScanIsAI.value = isAI
+      scanning.value = true
+      results.value = []; aiReport.value = ''
+      try {
+        const r = isAI ? await API.post('/scan/ai/start', { ...buildBody(), ai_mode: 'after_filter' }) : await API.post('/scan/start', buildBody())
+        scanId.value = r.data.scan_id
+        ElementPlus.ElMessage.success(isAI ? '已启动 AI 智能选股' : '已启动量化选股')
+        // SSE
+        _sse = new EventSource('/api/scan/progress/' + encodeURIComponent(scanId.value))
+        _sse.addEventListener('progress', ev => {
+          const d = JSON.parse(ev.data || '{}')
+          Object.assign(progress, d)
+          if (d.results) results.value = d.results
+          if (d.ai_report) aiReport.value = d.ai_report
+        })
+        _sse.addEventListener('final', ev => {
+          const d = JSON.parse(ev.data || '{}')
+          Object.assign(progress, d)
+          results.value = d.results || []
+          aiReport.value = d.ai_report || ''
+          scanning.value = false
+          ElementPlus.ElMessage.success('扫描完成，命中 ' + results.value.length + ' 只')
+          closeSSE()
+        })
+        _sse.onerror = () => {
+          scanning.value = false
+          closeSSE()
+          setTimeout(async () => { try { const r2 = await API.get('/scan/progress/' + encodeURIComponent(scanId.value)); Object.assign(progress, r2.data); results.value = r2.data.results||[]; aiReport.value = r2.data.ai_report||'' } catch {} }, 600)
+        }
+      } catch (e) { scanning.value = false; ElementPlus.ElMessage.error('启动失败: ' + e.message) }
+    }
+    function startNormalScan() { startScan(false) }
+    function startAIScan() { startScan(true) }
+
+    // 评分卡颜色
+    function ratingColor(r) { return ({ S:'#e74c3c', A:'#e67e22', B:'#f1c40f', C:'#3498db', D:'#95a5a6', E:'#7f8c8d' })[r] || '#ccc' }
+    function colorPct(p) { p = p || 0; return p > 0 ? '#e74c3c' : p < 0 ? '#27ae60' : '#909399' }
+    function pct(p) { p = p || 0; return (p>=0?'+':'') + (+p).toFixed(2) }
+
+    // 详情
+    const detailCode = ref('')
+    const detailMarket = ref('A')
+    const detailLoading = ref(false)
+    const detail = reactive({ score: null, buy_sell: null })
+    const detailAIReport = ref('')
+    const detailAILoading = ref(false)
+    const radarRef = ref(null)
+    let radarChart = null
+
+    function openDetail(row) {
+      detailCode.value = row.code
+      detailMarket.value = row.market || 'A'
+      activeTab.value = 'detail'
+      loadDetail()
+    }
+    function goAnalyze(row) { openDetail(row) }
+
+    async function loadDetail() {
+      detailLoading.value = true; detailAIReport.value = ''
+      try {
+        const r = await API.post('/analyze/stock', { code: detailCode.value, market: detailMarket.value, include_kline: true, kline_days: 120 })
+        detail.score = r.data.score; detail.buy_sell = r.data.buy_sell
+        await nextTick()
+        if (radarRef.value) {
+          if (!radarChart) radarChart = echarts.init(radarRef.value)
+          const s = detail.score?.scores || {}
+          radarChart.setOption({
+            tooltip: {},
+            radar: { indicator: [{name:'技术面',max:100},{name:'基本面',max:100},{name:'情绪面',max:100},{name:'综合分',max:100}], center:['50%','55%'], radius:'70%' },
+            series: [{ type:'radar', data:[{ value:[s.technical||0,s.fundamental||0,s.sentiment||0,s.comprehensive_adjusted||0], name:'得分', areaStyle:{ color:'rgba(102,126,234,0.3)' }, lineStyle:{ color:'#667eea' }, itemStyle:{ color:'#764ba2' } }] }]
+          })
+          radarChart.resize()
+        }
+      } catch (e) { ElementPlus.ElMessage.error('加载失败: ' + e.message) }
+      finally { detailLoading.value = false }
+    }
+
+    async function doDetailAI() {
+      if (!detail.score) return
+      detailAILoading.value = true; detailAIReport.value = ''
+      try { const r = await API.post('/analyze/stock/ai', { code: detailCode.value, market: detailMarket.value, score_res: detail.score }); detailAIReport.value = r.data.ai_report || ''; ElementPlus.ElMessage.success('AI报告生成完成') }
+      catch (e) { ElementPlus.ElMessage.error('AI分析失败: ' + e.message) }
+      finally { detailAILoading.value = false }
+    }
+
+    function doSingleAI(row) { openDetail(row); setTimeout(() => doDetailAI(), 1000) }
+
+    // 加载配置 + 热门
+    onMounted(async () => {
+      try {
+        const r = await API.get('/common/config'); const d = r.data
+        Object.assign(weights, d.weights); scoreThreshold.value = d.score_threshold; sectors.value = d.sectors || []
+      } catch {}
+      checkOllama()
+      try { const h = await API.get('/search/hot', { params: { markets: 'A', limit: 5 } }); searchResult.value = h.data.items || [] } catch {}
+    })
+
+    return {
+      q, searchMarkets, searchResult, searchLoading, onSearch, doSearch,
+      weights, scoreThreshold, topN, workers, scanMarkets, sector, sectors, customCodes, includeBuySell,
+      ollamaOk, ollamaModel,
+      scanning, scanId, progress, results, aiReport, lastScanIsAI, activeTab,
+      startNormalScan, startAIScan, ratingColor, colorPct, pct,
+      detailCode, detailLoading, detail, detailAIReport, detailAILoading, radarRef,
+      openDetail, goAnalyze, doSingleAI, doDetailAI,
+    }
+  }
+}
+app.mixin({})
+app._component = root.setup
+// 直接挂载：我们提供一个标准 setup 入口（Vue3 createApp 直接使用 setup 函数）
+const realApp = createApp(root)
+realApp.use(ElementPlus)
+realApp.mount('#app')
+</script>
+</body>
+</html>

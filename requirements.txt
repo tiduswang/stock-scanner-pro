@@ -1,0 +1,29 @@
+# ===== 核心数据获取 =====
+akshare==1.16.72
+pandas==2.2.2
+numpy==2.1.2
+scipy==1.15.1
+
+# ===== 搜索 =====
+pypinyin==0.53.0
+
+# ===== Web框架 =====
+fastapi==0.115.11
+uvicorn[standard]==0.34.0
+pydantic==2.10.6
+pydantic-settings==2.6.1
+httpx==0.28.1
+python-multipart==0.0.12
+
+# ===== AI (Ollama) =====
+ollama==0.4.7
+
+# ===== 工具 =====
+python-dotenv==1.0.1
+loguru==0.7.2
+tqdm==4.67.1
+beautifulsoup4==4.12.3
+lxml==4.9.4
+
+# ===== 缓存 =====
+cachetools==5.5.0
