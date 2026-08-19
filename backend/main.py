@@ -51,16 +51,22 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+# 数据库初始化（建表）
+from backend.db.session import init_db
+init_db()
+
 # 路由注册
 from backend.routers.common import router as common_router
 from backend.routers.search import router as search_router
 from backend.routers.analyze import router as analyze_router
 from backend.routers.scan import router as scan_router
+from backend.routers.data import router as data_router
 
 app.include_router(common_router)
 app.include_router(search_router)
 app.include_router(analyze_router)
 app.include_router(scan_router)
+app.include_router(data_router)
 
 
 # ============ 静态前端文件：两种模式 ============

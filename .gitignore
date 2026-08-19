@@ -52,3 +52,9 @@ desktop.ini
 *.tmp
 *.bak
 *.orig
+
+# ===== 本地数据库 =====
+data/
+*.db
+*.db-shm
+*.db-wal

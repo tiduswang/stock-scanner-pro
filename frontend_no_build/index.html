@@ -59,9 +59,12 @@
         <div class="logo-sub">量化T+1 · 三面分析 · Ollama本地AI深度解读</div>
       </div>
     </div>
-    <div style="display:flex; gap:10px">
+    <div style="display:flex; gap:10px; align-items:center">
+      <el-select v-model="ollamaModel" :loading="ollamaModelsLoading" placeholder="选择 Ollama 模型" size="small" style="width:220px" @change="switchOllamaModel">
+        <el-option v-for="m in ollamaModels" :key="m" :value="m" :label="m"></el-option>
+      </el-select>
       <el-tag :type="ollamaOk ? 'success' : 'warning'" effect="plain" round>
-        Ollama: {{ ollamaOk ? ollamaModel + ' 已连接' : '未连接' }}
+        {{ ollamaOk ? '已连接' : '未连接' }}
       </el-tag>
       <el-tag type="info" effect="plain" round>T+1 模式</el-tag>
     </div>
@@ -148,6 +151,26 @@
                 未检测到Ollama。请先安装Ollama并执行： <code>ollama pull qwen2.5:7b</code>
               </el-alert>
             </el-form>
+          </el-card>
+        </el-col>
+
+        <el-col :span="24" style="margin-bottom:16px">
+          <el-card shadow="never">
+            <template #header><b>📥 数据同步</b></template>
+            <el-button type="primary" :loading="syncing" :disabled="syncProgress.status==='running'" @click="startDataSync">
+              📥 同步日线数据
+            </el-button>
+            <div v-if="syncProgress.status && syncProgress.status !== 'idle'" style="margin-top:12px">
+              <el-progress :percentage="syncProgress.progress_pct || 0" :stroke-width="14" :status="syncProgress.status==='done' ? 'success' : (syncProgress.status==='error' ? 'exception' : '')"></el-progress>
+              <div class="kpi-row" style="margin-top:10px">
+                <div class="kpi-item"><div class="kpi-label">总数</div><div class="kpi-value">{{ syncProgress.total || 0 }}</div></div>
+                <div class="kpi-item"><div class="kpi-label">已处理</div><div class="kpi-value">{{ syncProgress.processed || 0 }}</div></div>
+                <div class="kpi-item"><div class="kpi-label">预计剩余</div><div class="kpi-value" style="font-size:14px">{{ syncProgress.eta_text || '-' }}</div></div>
+              </div>
+              <div style="font-size:12px;color:#606266;margin-top:6px">
+                {{ syncProgress.current_stage || '' }}
+              </div>
+            </div>
           </el-card>
         </el-col>
 
@@ -284,7 +307,7 @@
                     <el-button :loading="detailAILoading" type="primary" @click="doDetailAI">{{ detailAIReport ? '重新生成' : '生成AI分析' }}</el-button>
                   </div>
                 </template>
-                <el-empty v-if="!detailAIReport && !detailAILoading" description="点击右上角生成报告"></el-empty>
+                <template v-if="!detailAIReport && !detailAILoading"><el-empty description="点击右上角生成报告"></el-empty></template>
                 <div v-else-if="detailAILoading" style="text-align:center;padding:24px; font-size:22px">⌛ AI 生成中，请耐心等待...</div>
                 <div v-else class="report-box md-inline">{{ detailAIReport }}</div>
               </el-card>
@@ -297,7 +320,7 @@
 </div>
 
 <script>
-const { createApp, reactive, ref, computed, watch, onMounted, nextTick } = Vue
+const { createApp, reactive, ref, computed, watch, onMounted, onBeforeUnmount, nextTick } = Vue
 const API = axios.create({ baseURL: '/api', timeout: 60_000 })
 
 // Vue3 + Element Plus + Icons Vue (IIFE exposes global ElementPlusIconsVue)
@@ -336,9 +359,89 @@ const root = {
     // Ollama
     const ollamaOk = ref(false)
     const ollamaModel = ref('qwen2.5:7b')
+    const ollamaModels = ref([])
+    const ollamaModelsLoading = ref(false)
     async function checkOllama() {
       try { const r = await API.post('/common/ollama/check', {}); const d = r.data; ollamaOk.value = !!d.ok; if(d.using_model) ollamaModel.value = d.using_model }
       catch(e) { ollamaOk.value = false }
+    }
+    async function loadOllamaModels() {
+      ollamaModelsLoading.value = true
+      try {
+        const r = await API.get('/common/ollama/models')
+        const d = r.data || {}
+        if (d.ok) {
+          ollamaModels.value = Array.isArray(d.models) ? d.models : []
+          if (d.current) ollamaModel.value = d.current
+        }
+      } catch(e) {
+        ElementPlus.ElMessage.error('加载模型列表失败: ' + (e.message || ''))
+      } finally {
+        ollamaModelsLoading.value = false
+      }
+    }
+    async function switchOllamaModel(model) {
+      if (!model) return
+      try {
+        const r = await API.post('/common/ollama/switch', { model })
+        const d = r.data || {}
+        if (d.ok) {
+          ollamaModel.value = d.current || model
+          ollamaOk.value = true
+          ElementPlus.ElMessage.success('已切换模型: ' + ollamaModel.value)
+        } else {
+          ElementPlus.ElMessage.error('切换模型失败')
+        }
+      } catch(e) {
+        ElementPlus.ElMessage.error('切换模型失败: ' + (e.message || ''))
+      }
+    }
+
+    // 数据同步
+    const syncing = ref(false)
+    const syncProgress = reactive({
+      status: 'idle', total: 0, processed: 0, progress_pct: 0,
+      eta_text: '', current_stage: ''
+    })
+    let _syncPoller = null
+    function stopSyncPolling() {
+      if (_syncPoller) { clearInterval(_syncPoller); _syncPoller = null }
+    }
+    async function pollSyncStatus() {
+      try {
+        const r = await API.get('/data/sync/status')
+        const d = r.data || {}
+        Object.assign(syncProgress, d)
+        if (d.status === 'done' || d.status === 'idle') {
+          stopSyncPolling()
+          syncing.value = false
+          if (d.status === 'done') {
+            ElementPlus.ElMessage.success('数据同步完成，已处理 ' + (d.processed || 0) + ' 条')
+          }
+        }
+      } catch(e) {
+        // 静默失败，下次轮询继续
+      }
+    }
+    async function startDataSync() {
+      if (syncing.value) return
+      syncing.value = true
+      syncProgress.status = 'running'
+      syncProgress.progress_pct = 0
+      syncProgress.processed = 0
+      syncProgress.total = 0
+      syncProgress.eta_text = ''
+      syncProgress.current_stage = '正在启动同步...'
+      try {
+        await API.post('/data/sync', { markets: ['A'], sync_type: 'daily_kline' })
+        ElementPlus.ElMessage.success('已启动日线数据同步')
+        stopSyncPolling()
+        _syncPoller = setInterval(pollSyncStatus, 1500)
+      } catch(e) {
+        syncing.value = false
+        syncProgress.status = 'idle'
+        ElementPlus.ElMessage.error('启动同步失败: ' + (e.message || ''))
+      }
     }
 
     // 选股扫描
@@ -462,13 +565,21 @@ const root = {
         Object.assign(weights, d.weights); scoreThreshold.value = d.score_threshold; sectors.value = d.sectors || []
       } catch(e) {}
       checkOllama()
+      loadOllamaModels()
       try { const h = await API.get('/search/hot', { params: { markets: 'A', limit: 5 } }); searchResult.value = h.data.items || [] } catch(e) {}
+    })
+
+    // 页面卸载时清理同步轮询与 SSE，避免内存泄漏
+    onBeforeUnmount(() => {
+      closeSSE()
+      stopSyncPolling()
     })
 
     return {
       q, searchMarkets, searchResult, searchLoading, onSearch, doSearch,
       weights, scoreThreshold, topN, workers, scanMarkets, sector, sectors, customCodes, includeBuySell,
-      ollamaOk, ollamaModel,
+      ollamaOk, ollamaModel, ollamaModels, ollamaModelsLoading, loadOllamaModels, switchOllamaModel,
+      syncing, syncProgress, startDataSync,
       scanning, scanId, progress, results, aiReport, lastScanIsAI, activeTab,
       startNormalScan, startAIScan, ratingColor, colorPct, pct,
       detailCode, detailLoading, detail, detailAIReport, detailAILoading, radarRef,

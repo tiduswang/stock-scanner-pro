@@ -29,8 +29,7 @@ class ScoringEngine:
         self.senti = get_sentiment_analyzer()
 
     def score_stock(self, code: str, market: Literal["A", "HK", "ETF"] = "A",
-                    weights: Optional[Dict] = None, analysis_params: Optional[Dict] = None)
-            -> Dict:
+                    weights: Optional[Dict] = None, analysis_params: Optional[Dict] = None) -> Dict:
         """
         单只股票综合评分
         Args:

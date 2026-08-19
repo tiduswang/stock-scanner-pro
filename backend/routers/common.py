@@ -63,3 +63,27 @@ async def check_ollama(cfg: Optional[OllamaCfg] = None):
     )
     res = await client.check_connection()
     return res
+
+
+@router.get("/ollama/models")
+async def list_ollama_models():
+    """列出可用Ollama模型 + 当前使用的模型"""
+    from backend.config import runtime
+    client = OllamaClient()
+    res = await client.check_connection()
+    return {
+        "ok": res.get("ok", False),
+        "models": res.get("available_models", []),
+        "current": runtime.current_ollama_model,
+    }
+
+
+@router.post("/ollama/switch")
+async def switch_ollama_model(body: dict):
+    """切换当前Ollama模型"""
+    from backend.config import runtime, get_settings
+    model = body.get("model", "")
+    if not model:
+        return {"ok": False, "msg": "model不能为空"}
+    runtime.current_ollama_model = model
+    return {"ok": True, "current": model}

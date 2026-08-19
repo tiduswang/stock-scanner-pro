@@ -86,10 +86,7 @@ async def progress_stream(scan_id: str, request: Request):
     if not p:
         # 立即返回错误事件
         async def _empty():
-            yield f"event: error
-data: {json.dumps({'msg': 'scan_id不存在'}, ensure_ascii=False)}
-
-"
+            yield f"event: error\ndata: {json.dumps({'msg': 'scan_id不存在'}, ensure_ascii=False)}\n\n"
         return StreamingResponse(_empty(), media_type="text/event-stream")
 
     async def _gen():
@@ -111,16 +108,10 @@ data: {json.dumps({'msg': 'scan_id不存在'}, ensure_ascii=False)}
                 # 每1%或状态变化推送
                 if abs(cur_pct - last_pct) >= 1 or status in ("done", "error"):
                     last_pct = cur_pct
-                    yield f"event: progress
-data: {json.dumps(p, ensure_ascii=False)}
-
-"
+                    yield f"event: progress\ndata: {json.dumps(p, ensure_ascii=False)}\n\n"
                 if status in ("done", "error") and not sent_done:
                     sent_done = True
-                    yield f"event: final
-data: {json.dumps(p, ensure_ascii=False)}
-
-"
+                    yield f"event: final\ndata: {json.dumps(p, ensure_ascii=False)}\n\n"
                     break
                 await asyncio.sleep(0.8)
         except asyncio.CancelledError:

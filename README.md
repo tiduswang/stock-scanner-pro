@@ -142,11 +142,13 @@
 │   └── main.py                # FastAPI入口
 │
 ├── requirements.txt           # Python依赖
-├── start.bat                  # Windows一键启动
-├── bootstrap.py               # 自动安装+检查+启动
-├── check_deps.py              # 依赖检查脚本
+├── installer.py               # 📦 独立安装 App（装依赖+检查，不启动）
+├── install.bat                # Windows 一键安装（调用 installer.py）
+├── start.bat                  # ▶️ 主程序启动（只启动，不装依赖）
 └── .env.example               # 配置模板
 ```
+
+> **职责分离**：`installer.py / install.bat` 只负责依赖安装和环境检查；`start.bat / backend.main` 只负责启动 Web 服务。主程序不包含任何依赖安装逻辑。
 
 ### 技术栈
 
@@ -165,32 +167,45 @@
 
 ## 快速开始
 
-### 方式一：Windows 一键启动（推荐）
+> 项目已将「依赖安装」与「主程序启动」彻底分离：安装逻辑只存在于 `installer.py`，主程序 `start.bat / backend.main` 不再包含任何依赖安装代码。
+
+### 方式一：Windows 两步走（推荐）
 
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/your-username/stock-scanner-pro.git
 cd stock-scanner-pro
 
-# 2. 双击 start.bat 或在终端运行
-python bootstrap.py
+# 2. 安装依赖（只装不启动）—— 双击 install.bat 或：
+python installer.py
+
+# 3. 启动主程序（不装依赖）—— 双击 start.bat 或：
+python -m uvicorn backend.main:app --host 0.0.0.0 --port 8888 --reload
 ```
 
-`bootstrap.py` 会自动完成：安装依赖 → 语法检查 → 模块导入检查 → 启动服务
-
-### 方式二：手动启动
+### 方式二：手动命令
 
 ```bash
-# 1. 安装依赖
-pip install -r requirements.txt
+# 1. 安装依赖（独立 App 完成）
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+python installer.py --check-only    # 复检（不重新装）
 
 # 2. 配置环境
 cp .env.example .env
 # 编辑 .env 修改端口/Ollama地址/权重等
 
-# 3. 启动服务
+# 3. 启动主程序
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8888 --reload
 ```
+
+### installer.py 子命令
+
+| 命令 | 说明 |
+|------|------|
+| `python installer.py` | 完整安装+检查（默认） |
+| `python installer.py --check-only` | 仅检查，不安装（CI/复检用） |
+| `python installer.py --install-only` | 仅安装依赖，不做后续检查 |
+| `python installer.py --no-mirror` | 不使用清华源，直接官方源 |
 
 ### 方式三：Docker（计划中）
 
@@ -253,13 +268,32 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 第四步：安装依赖
+### 第四步：安装依赖（使用独立安装 App）
+
+> 项目将「依赖安装」从主程序中剥离，单独做成一个 App。主程序不会自动装依赖，必须先执行本步。
 
 ```bash
-# 国内用户推荐使用清华源加速
+# 推荐：使用独立安装 App（自动用清华源加速 + 语法检查 + 导入检查）
+python installer.py
+
+# 或者 Windows 用户双击：
+install.bat
+
+# 国际用户不使用清华源：
+python installer.py --no-mirror
+
+# 只想检查不重装（CI/复检）：
+python installer.py --check-only
+```
+
+<details>
+<summary><b>手动安装（不使用 installer.py）</b></summary>
+
+```bash
+# 国内用户
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 
-# 国际用户直接安装
+# 国际用户
 pip install -r requirements.txt
 ```
 
@@ -268,6 +302,7 @@ pip install -r requirements.txt
 > pip install --force-reinstall --no-deps numpy==2.1.2
 > pip install -r requirements.txt
 > ```
+</details>
 
 ### 第五步：（可选）安装 Ollama
 
@@ -311,16 +346,13 @@ WEIGHT_SENTIMENT=0.20
 DEFAULT_SCORE_THRESHOLD=70
 ```
 
-### 第七步：启动服务
+### 第七步：启动主程序（不装依赖，依赖请用 installer 安装）
 
 ```bash
-# 方式1：一键启动（自动安装依赖+检查+启动）
-python bootstrap.py
-
-# 方式2：直接启动
+# 方式1：直接启动主程序
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8888 --reload
 
-# 方式3：Windows双击
+# 方式2：Windows 双击 start.bat（含轻量自检，缺失依赖会提示运行 install.bat）
 start.bat
 ```
 
@@ -504,9 +536,9 @@ stock-scanner-pro/
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
-├── start.bat
-├── bootstrap.py
-├── check_deps.py
+├── installer.py                   # 📦 独立安装 App（装依赖+检查，不启动）
+├── install.bat                    # Windows 一键安装
+├── start.bat                      # ▶️ 主程序启动（只启动，不装依赖）
 └── README.md
 ```
 

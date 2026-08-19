@@ -96,9 +96,8 @@ class BaseScanner:
             df = self.stock_list.get_market_list(m)
             if df.empty:
                 continue
-            # 全量扫描太多 -> 这里默认限制（按成交额粗筛交给用户）
-            limit = {"A": 300, "HK": 100, "ETF": 100}.get(m, 100)
-            rows = df.head(limit).to_dict(orient="records")
+            # 全量扫描（数据来自本地DB，无数量限制）
+            rows = df.to_dict(orient="records")
             for r in rows:
                 pool.append({"code": r["code"], "name": r.get("name", ""), "market": r.get("market", m)})
         log.info(f"[选股] 按市场 {req.markets} 构建股票池: {len(pool)} 只")

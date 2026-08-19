@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     # AI选股默认分数阈值
     DEFAULT_SCORE_THRESHOLD: int = 70
 
+    # 数据库配置
+    DATABASE_URL: str = ""  # 留空则默认用 SQLite: data/stock.db
+    # 数据同步配置
+    SYNC_MAX_WORKERS: int = 5
+    SYNC_RETRY: int = 2
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -42,6 +48,16 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """获取配置实例（单例）"""
     return Settings()
+
+
+class RuntimeState:
+    """运行时可变状态（不通过 pydantic，直接类属性）"""
+    current_ollama_model: str = ""
+
+
+runtime = RuntimeState()
+# 初始化为配置默认值
+runtime.current_ollama_model = get_settings().OLLAMA_MODEL
 
 
 # 市场类型定义

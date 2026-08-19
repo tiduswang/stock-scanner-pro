@@ -10,7 +10,7 @@ import threading
 from typing import Dict, List, Optional, Literal, Generator
 
 import httpx
-from backend.config import get_settings
+from backend.config import get_settings, runtime
 from backend.utils.logger import log
 from backend.services.scanner.base_scanner import BaseScanner, ScanRequest
 from backend.services.scanner.progress import get_progress_tracker
@@ -24,7 +24,7 @@ class OllamaClient:
     def __init__(self, base_url: str = None, model: str = None, timeout: int = None):
         s = get_settings()
         self.base_url = (base_url or s.OLLAMA_BASE_URL).rstrip("/")
-        self.model = model or s.OLLAMA_MODEL
+        self.model = model or runtime.current_ollama_model or s.OLLAMA_MODEL
         self.timeout = timeout or s.OLLAMA_TIMEOUT
         log.info(f"[Ollama] 初始化: {self.base_url}, model={self.model}")
 
@@ -97,9 +97,7 @@ class OllamaClient:
                             continue
         except Exception as e:
             log.error(f"[Ollama] 流式生成失败: {e}")
-            yield f"
-
-[AI流式生成失败: {e}]"
+            yield f"\n\n[AI流式生成失败: {e}]"
 
 
 class AIScanner:
@@ -233,14 +231,11 @@ class AIScanner:
                 ai_report_parts.append(tok)
                 now = time.time()
                 if now - last_log_time > 1.0:  # 每1秒更新一下状态
-                    preview = "".join(ai_report_parts[-80:]).replace("
-", " / ")
+                    preview = "".join(ai_report_parts[-80:]).replace("\n", " / ")
                     self.tracker._progresses[scan_id].ai_streaming_preview = preview
                     last_log_time = now
         except Exception as e:
-            ai_report_parts.append(f"
-
-[AI分析异常: {e}]")
+            ai_report_parts.append(f"\n\n[AI分析异常: {e}]")
 
         final_report = "".join(ai_report_parts).strip()
 
